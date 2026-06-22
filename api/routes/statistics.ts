@@ -85,7 +85,9 @@ router.get('/', requireAuth, requireRole('admin', 'counselor'), async (_req: Aut
   const rescheduleRejected = (db.prepare("SELECT COUNT(*) as count FROM reschedule_requests WHERE status = 'rejected'").get() as any).count;
   const reschedulePending = (db.prepare("SELECT COUNT(*) as count FROM reschedule_requests WHERE status = 'pending'").get() as any).count;
 
-  const conflictIntercepted = (db.prepare("SELECT COUNT(*) as count FROM appointment_logs WHERE action = 'created' AND details LIKE '%冲突%'").get() as any).count;
+  const conflictIntercepted = (db.prepare('SELECT COUNT(*) as count FROM conflict_interceptions').get() as any).count;
+  const bookingConflictCount = (db.prepare("SELECT COUNT(*) as count FROM conflict_interceptions WHERE conflict_type = 'booking_appointment'").get() as any).count;
+  const rescheduleConflictCount = (db.prepare("SELECT COUNT(*) as count FROM conflict_interceptions WHERE conflict_type = 'reschedule_appointment'").get() as any).count;
 
   const unavailableDateImpact = db.prepare(`
     SELECT ud.id, ud.counselor_id, ud.unavailable_date, ud.reason, c.name as counselor_name,
@@ -131,6 +133,11 @@ router.get('/', requireAuth, requireRole('admin', 'counselor'), async (_req: Aut
         pending: reschedulePending,
       },
       conflictIntercepted,
+      conflictInterceptedDetails: {
+        total: conflictIntercepted,
+        booking: bookingConflictCount,
+        reschedule: rescheduleConflictCount,
+      },
       unavailableDateImpact,
       totalUnavailableImpact,
     },

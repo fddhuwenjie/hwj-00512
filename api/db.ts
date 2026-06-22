@@ -152,6 +152,23 @@ const initDB = () => {
       FOREIGN KEY (client_id) REFERENCES clients(id),
       FOREIGN KEY (counselor_id) REFERENCES counselors(id)
     );
+
+    CREATE TABLE IF NOT EXISTS conflict_interceptions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      counselor_id INTEGER NOT NULL,
+      client_id INTEGER,
+      conflict_type TEXT NOT NULL CHECK(conflict_type IN ('booking_appointment', 'reschedule_appointment')),
+      conflict_date TEXT NOT NULL,
+      conflict_time TEXT NOT NULL,
+      intercept_reason TEXT NOT NULL,
+      existing_appointment_id INTEGER,
+      operator_id INTEGER,
+      operator_name TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (counselor_id) REFERENCES counselors(id),
+      FOREIGN KEY (client_id) REFERENCES clients(id),
+      FOREIGN KEY (existing_appointment_id) REFERENCES appointments(id)
+    );
   `);
 
   const userCount = (db.prepare('SELECT COUNT(*) as count FROM users').get() as any).count;

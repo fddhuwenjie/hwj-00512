@@ -101,6 +101,32 @@ const addAppointmentLog = (appointmentId: number, action: string, operatorId: nu
   ).run(appointmentId, action, operatorId, operatorName, details);
 };
 
+const recordConflictInterception = (
+  counselorId: number,
+  clientId: number | null,
+  conflictType: 'booking_appointment' | 'reschedule_appointment',
+  conflictDate: string,
+  conflictTime: string,
+  interceptReason: string,
+  existingAppointmentId: number | null,
+  operatorId: number | null,
+  operatorName: string | null
+) => {
+  db.prepare(
+    'INSERT INTO conflict_interceptions (counselor_id, client_id, conflict_type, conflict_date, conflict_time, intercept_reason, existing_appointment_id, operator_id, operator_name) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+  ).run(
+    counselorId,
+    clientId,
+    conflictType,
+    conflictDate,
+    conflictTime,
+    interceptReason,
+    existingAppointmentId,
+    operatorId,
+    operatorName
+  );
+};
+
 router.get('/', requireAuth, async (req: AuthRequest, res: Response): Promise<void> => {
   const { status, counselor_id, client_id } = req.query;
   let query = `
@@ -300,6 +326,17 @@ router.post('/', requireAuth, async (req: AuthRequest, res: Response): Promise<v
   `).get(counselor_id, appointment_date, appointment_time);
 
   if (conflict) {
+    recordConflictInterception(
+      counselor_id,
+      clientId,
+      'booking_appointment',
+      appointment_date,
+      appointment_time,
+      '该时段已被预约',
+      conflict.id,
+      req.user!.id,
+      req.user!.name
+    );
     res.status(400).json({ error: '该时段已被预约', success: false, conflict_intercepted: true });
     return;
   }
@@ -487,6 +524,17 @@ router.post('/:id/reschedule', requireAuth, async (req: AuthRequest, res: Respon
   `).get(appointment.counselor_id, new_date, new_time, appointment.id);
 
   if (conflict) {
+    recordConflictInterception(
+      appointment.counselor_id,
+      appointment.client_id,
+      'reschedule_appointment',
+      new_date,
+      new_time,
+      '新时段已被预约',
+      conflict.id,
+      req.user!.id,
+      req.user!.name
+    );
     res.status(400).json({ success: false, error: '新时段已被预约', conflict_intercepted: true });
     return;
   }
@@ -575,6 +623,17 @@ router.put('/reschedule/:requestId/approve', requireAuth, requireRole('admin', '
   `).get(appointment.counselor_id, rescheduleRequest.new_date, rescheduleRequest.new_time, appointment.id);
 
   if (conflict) {
+    recordConflictInterception(
+      appointment.counselor_id,
+      appointment.client_id,
+      'reschedule_appointment',
+      rescheduleRequest.new_date,
+      rescheduleRequest.new_time,
+      '新时段已被其他预约占用，无法批准改期',
+      conflict.id,
+      req.user!.id,
+      req.user!.name
+    );
     res.status(400).json({ success: false, error: '新时段已被其他预约占用，无法批准改期' });
     return;
   }
