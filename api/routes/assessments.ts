@@ -106,12 +106,21 @@ router.get('/', requireAuth, async (req: AuthRequest, res: Response): Promise<vo
 
 router.get('/trend/:client_id', requireAuth, async (req: AuthRequest, res: Response): Promise<void> => {
   const { scale_type } = req.query;
+  let resolvedClientId = Number(req.params.client_id);
+
+  if (req.user!.role === 'client') {
+    const myId = getClientIdByUserId(req.user!.id);
+    if (myId) {
+      resolvedClientId = myId;
+    }
+  }
+
   let query = `
     SELECT id, scale_type, score, level, is_high_risk, created_at
     FROM assessments
     WHERE client_id = ?
   `;
-  const params: any[] = [req.params.client_id];
+  const params: any[] = [resolvedClientId];
 
   if (scale_type) {
     query += ' AND scale_type = ?';
@@ -159,6 +168,18 @@ router.post('/', requireAuth, async (req: AuthRequest, res: Response): Promise<v
   if (!clientId) {
     res.status(400).json({ success: false, error: '来访者信息缺失' });
     return;
+  }
+
+  if (appointment_id) {
+    const appointment: any = db.prepare('SELECT * FROM appointments WHERE id = ?').get(appointment_id);
+    if (!appointment) {
+      res.status(400).json({ success: false, error: '关联的预约不存在' });
+      return;
+    }
+    if (appointment.client_id !== clientId) {
+      res.status(403).json({ success: false, error: '无权关联该预约' });
+      return;
+    }
   }
 
   const score = answers.reduce((sum: number, v: number) => sum + (Number(v) || 0), 0);

@@ -14,6 +14,73 @@ const getCounselorIdByUserId = (userId: number): number | null => {
   return counselor ? counselor.id : null;
 };
 
+const getDayOfWeek = (dateStr: string): number => {
+  const d = new Date(dateStr);
+  const day = d.getDay();
+  return day === 0 ? 7 : day;
+};
+
+const parseAvailableSlots = (raw: any): Array<{ day: number; dayName: string; slots: string[] }> => {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) return parsed;
+  } catch {}
+  const result: Array<{ day: number; dayName: string; slots: string[] }> = [];
+  const dayMap: Record<string, number> = {
+    '周一': 1, '星期二': 2, '周二': 2, '星期三': 3, '周三': 3,
+    '星期四': 4, '周四': 4, '星期五': 5, '周五': 5, '星期六': 6, '周六': 6, '星期日': 7, '周日': 7, '星期天': 7,
+  };
+  const parts = String(raw).split(/[,，;；]/);
+  parts.forEach((p) => {
+    const match = p.trim().match(/(周[一二三四五六日天]|星期[一二三四五六日天])\s*[:：]?\s*([\d\-:：,，、\s]+)/);
+    if (match) {
+      const dayName = match[1];
+      const day = dayMap[dayName];
+      if (day) {
+        const timeStr = match[2].replace(/[：]/g, ':');
+        const slots: string[] = [];
+        const rangeMatch = timeStr.match(/(\d{1,2}:\d{2})\s*[-~至]\s*(\d{1,2}:\d{2})/g);
+        if (rangeMatch) {
+          rangeMatch.forEach((range) => {
+            const [start, end] = range.split(/[-~至]/).map((s) => s.trim());
+            let cur = start;
+            const [sh, sm] = start.split(':').map(Number);
+            const [eh, em] = end.split(':').map(Number);
+            let curMin = sh * 60 + sm;
+            const endMin = eh * 60 + em;
+            while (curMin < endMin) {
+              const h = Math.floor(curMin / 60);
+              const m = curMin % 60;
+              slots.push(`${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`);
+              curMin += 60;
+            }
+          });
+        } else {
+          const explicitSlots = timeStr.split(/[,，、\s]+/).filter((s) => /^\d{1,2}:\d{2}$/.test(s.trim()));
+          slots.push(...explicitSlots);
+        }
+        if (slots.length) {
+          result.push({ day, dayName, slots });
+        }
+      }
+    }
+  });
+  return result;
+};
+
+const isTimeInAvailableSlots = (
+  availableSlots: Array<{ day: number; dayName: string; slots: string[] }>,
+  dateStr: string,
+  timeStr: string
+): boolean => {
+  if (availableSlots.length === 0) return true;
+  const dayOfWeek = getDayOfWeek(dateStr);
+  const dayConfig = availableSlots.find((d) => d.day === dayOfWeek);
+  if (!dayConfig) return false;
+  return dayConfig.slots.includes(timeStr);
+};
+
 router.get('/', requireAuth, async (req: AuthRequest, res: Response): Promise<void> => {
   const { status, counselor_id, client_id } = req.query;
   let query = `
@@ -94,6 +161,35 @@ router.post('/', requireAuth, async (req: AuthRequest, res: Response): Promise<v
 
   if (!counselor_id || !appointment_date || !appointment_time) {
     res.status(400).json({ success: false, error: '缺少必要字段' });
+    return;
+  }
+
+  const counselor: any = db.prepare('SELECT * FROM counselors WHERE id = ?').get(counselor_id);
+  if (!counselor) {
+    res.status(404).json({ success: false, error: '咨询师不存在' });
+    return;
+  }
+
+  if (!counselor.is_active) {
+    res.status(400).json({ success: false, error: '该咨询师已停用，暂不可预约' });
+    return;
+  }
+
+  const availableSlots = parseAvailableSlots(counselor.available_slots);
+  if (!isTimeInAvailableSlots(availableSlots, appointment_date, appointment_time)) {
+    const dayName = ['', '周一', '周二', '周三', '周四', '周五', '周六', '周日'][getDayOfWeek(appointment_date)];
+    const daySlots = availableSlots.find((d) => d.day === getDayOfWeek(appointment_date));
+    if (daySlots) {
+      res.status(400).json({
+        success: false,
+        error: `${dayName}该咨询师可预约时段为：${daySlots.slots.join('、')}，所选时间 ${appointment_time} 不在可预约范围内`,
+      });
+    } else {
+      res.status(400).json({
+        success: false,
+        error: `${dayName}该咨询师不接待预约，可预约日：${availableSlots.map((d) => d.dayName).join('、')}`,
+      });
+    }
     return;
   }
 
