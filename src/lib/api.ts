@@ -4,6 +4,7 @@ export interface ApiResponse<T> {
   success: boolean;
   data?: T;
   error?: string;
+  conflict_intercepted?: boolean;
 }
 
 const getAuthHeaders = (): Record<string, string> => {
@@ -81,6 +82,22 @@ export const api = {
     complete: (id: number) => request<any>(`/appointments/${id}/complete`, { method: 'PUT' }),
     noShow: (id: number) => request<any>(`/appointments/${id}/no_show`, { method: 'PUT' }),
     remove: (id: number) => request<any>(`/appointments/${id}`, { method: 'DELETE' }),
+    logs: (id: number) => request<any[]>(`/appointments/${id}/logs`),
+    reschedule: (id: number, data: any) => request<any>(`/appointments/${id}/reschedule`, { method: 'POST', body: JSON.stringify(data) }),
+    rescheduleRequests: (id: number) => request<any[]>(`/appointments/${id}/reschedule-requests`),
+    approveReschedule: (requestId: number, data?: any) => request<any>(`/appointments/reschedule/${requestId}/approve`, { method: 'PUT', body: JSON.stringify(data || {}) }),
+    rejectReschedule: (requestId: number, data?: any) => request<any>(`/appointments/reschedule/${requestId}/reject`, { method: 'PUT', body: JSON.stringify(data || {}) }),
+    pendingReschedules: () => request<any[]>('/appointments/reschedule/pending'),
+  },
+  schedules: {
+    list: (counselorId: number) => request<any>(`/schedules?counselor_id=${counselorId}`),
+    getSchedules: (counselorId: number) => request<any[]>(`/schedules/${counselorId}/schedules`),
+    addSchedule: (counselorId: number, data: any) => request<any>(`/schedules/${counselorId}/schedules`, { method: 'POST', body: JSON.stringify(data) }),
+    updateSchedule: (counselorId: number, scheduleId: number, data: any) => request<any>(`/schedules/${counselorId}/schedules/${scheduleId}`, { method: 'PUT', body: JSON.stringify(data) }),
+    deleteSchedule: (counselorId: number, scheduleId: number) => request<any>(`/schedules/${counselorId}/schedules/${scheduleId}`, { method: 'DELETE' }),
+    getUnavailableDates: (counselorId: number) => request<any[]>(`/schedules/${counselorId}/unavailable-dates`),
+    addUnavailableDate: (counselorId: number, data: any) => request<any>(`/schedules/${counselorId}/unavailable-dates`, { method: 'POST', body: JSON.stringify(data) }),
+    deleteUnavailableDate: (counselorId: number, dateId: number) => request<any>(`/schedules/${counselorId}/unavailable-dates/${dateId}`, { method: 'DELETE' }),
   },
   assessments: {
     scales: () => request<any>('/assessments/scales'),

@@ -99,6 +99,59 @@ const initDB = () => {
       FOREIGN KEY (client_id) REFERENCES clients(id),
       FOREIGN KEY (counselor_id) REFERENCES counselors(id)
     );
+
+    CREATE TABLE IF NOT EXISTS counselor_schedules (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      counselor_id INTEGER NOT NULL,
+      day_of_week INTEGER NOT NULL CHECK(day_of_week BETWEEN 1 AND 7),
+      start_time TEXT NOT NULL,
+      end_time TEXT NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (counselor_id) REFERENCES counselors(id),
+      UNIQUE(counselor_id, day_of_week, start_time, end_time)
+    );
+
+    CREATE TABLE IF NOT EXISTS counselor_unavailable_dates (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      counselor_id INTEGER NOT NULL,
+      unavailable_date TEXT NOT NULL,
+      reason TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (counselor_id) REFERENCES counselors(id),
+      UNIQUE(counselor_id, unavailable_date)
+    );
+
+    CREATE TABLE IF NOT EXISTS appointment_logs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      appointment_id INTEGER NOT NULL,
+      action TEXT NOT NULL CHECK(action IN ('created', 'confirmed', 'cancelled', 'rejected', 'reschedule_requested', 'reschedule_approved', 'reschedule_rejected')),
+      operator_id INTEGER,
+      operator_name TEXT,
+      details TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (appointment_id) REFERENCES appointments(id)
+    );
+
+    CREATE TABLE IF NOT EXISTS reschedule_requests (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      appointment_id INTEGER NOT NULL,
+      client_id INTEGER NOT NULL,
+      counselor_id INTEGER NOT NULL,
+      original_date TEXT NOT NULL,
+      original_time TEXT NOT NULL,
+      new_date TEXT NOT NULL,
+      new_time TEXT NOT NULL,
+      reason TEXT,
+      status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'approved', 'rejected')),
+      reviewer_id INTEGER,
+      reviewer_name TEXT,
+      review_note TEXT,
+      reviewed_at DATETIME,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (appointment_id) REFERENCES appointments(id),
+      FOREIGN KEY (client_id) REFERENCES clients(id),
+      FOREIGN KEY (counselor_id) REFERENCES counselors(id)
+    );
   `);
 
   const userCount = (db.prepare('SELECT COUNT(*) as count FROM users').get() as any).count;
@@ -136,6 +189,16 @@ const initDB = () => {
       '13600136000',
       '近期工作压力大，睡眠不好，情绪低落'
     );
+
+    const counselorId = (db.prepare('SELECT id FROM counselors WHERE user_id = ?').get(counselorUserId) as any).id;
+    const clientId = (db.prepare('SELECT id FROM clients WHERE user_id = ?').get(clientUserId) as any).id;
+
+    const insertSchedule = db.prepare(
+      'INSERT INTO counselor_schedules (counselor_id, day_of_week, start_time, end_time) VALUES (?, ?, ?, ?)'
+    );
+    insertSchedule.run(counselorId, 1, '09:00', '12:00');
+    insertSchedule.run(counselorId, 3, '14:00', '18:00');
+    insertSchedule.run(counselorId, 5, '09:00', '17:00');
   }
 };
 

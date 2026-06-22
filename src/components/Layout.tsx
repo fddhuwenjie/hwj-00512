@@ -29,7 +29,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
   const allNavItems = [
     { path: '/', label: '首页', icon: LayoutDashboard, roles: ['admin', 'counselor', 'client'] },
-    { path: '/counselors', label: '咨询师管理', icon: Users, roles: ['admin'] },
+    { path: '/counselors', label: '咨询师管理', icon: Users, roles: ['admin', 'counselor'] },
     { path: '/clients', label: '来访者档案', icon: UserCircle, roles: ['admin', 'counselor'] },
     { path: '/profile', label: '我的档案', icon: UserCircle, roles: ['client'] },
     { path: '/appointments', label: '预约管理', icon: CalendarCheck, roles: ['admin', 'counselor', 'client'] },

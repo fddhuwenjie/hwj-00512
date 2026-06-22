@@ -8,9 +8,21 @@ import { Select } from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/Textarea';
 import { Badge } from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
-import { Plus, Pencil, Power, Trash2 } from 'lucide-react';
+import { Plus, Pencil, Power, Trash2, Calendar, Clock, X } from 'lucide-react';
 
 const SPECIALTY_OPTIONS = ['焦虑', '抑郁', '亲密关系', '亲子', '职业', '睡眠'];
+
+const DAY_OPTIONS = [
+  { value: 1, label: '周一' },
+  { value: 2, label: '周二' },
+  { value: 3, label: '周三' },
+  { value: 4, label: '周四' },
+  { value: 5, label: '周五' },
+  { value: 6, label: '周六' },
+  { value: 7, label: '周日' },
+];
+
+const DAY_NAMES: Record<number, string> = { 1: '周一', 2: '周二', 3: '周三', 4: '周四', 5: '周五', 6: '周六', 7: '周日' };
 
 const parseSpecialties = (raw: any): string[] => {
   if (!raw) return [];
@@ -38,6 +50,7 @@ const formatSlots = (raw: any): string => {
 export default function Counselors() {
   const { user } = useAuthStore();
   const isAdmin = user?.role === 'admin';
+  const isCounselor = user?.role === 'counselor';
   const [counselors, setCounselors] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
@@ -51,6 +64,13 @@ export default function Counselors() {
     fee: 0,
     bio: '',
   });
+
+  const [scheduleCounselor, setScheduleCounselor] = useState<any>(null);
+  const [schedules, setSchedules] = useState<any[]>([]);
+  const [unavailableDates, setUnavailableDates] = useState<any[]>([]);
+  const [scheduleModalOpen, setScheduleModalOpen] = useState(false);
+  const [addScheduleForm, setAddScheduleForm] = useState({ day_of_week: 1, start_time: '09:00', end_time: '12:00' });
+  const [addUnavailableForm, setAddUnavailableForm] = useState({ unavailable_date: '', reason: '' });
 
   const loadCounselors = async () => {
     setLoading(true);
@@ -125,6 +145,61 @@ export default function Counselors() {
     }
   };
 
+  const openScheduleManager = async (c: any) => {
+    setScheduleCounselor(c);
+    const [schedRes, unavailRes] = await Promise.all([
+      api.schedules.getSchedules(c.id),
+      api.schedules.getUnavailableDates(c.id),
+    ]);
+    if (schedRes.success && schedRes.data) setSchedules(schedRes.data);
+    if (unavailRes.success && unavailRes.data) setUnavailableDates(unavailRes.data);
+    setScheduleModalOpen(true);
+  };
+
+  const handleAddSchedule = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!scheduleCounselor) return;
+    const res = await api.schedules.addSchedule(scheduleCounselor.id, addScheduleForm);
+    if (res.success) {
+      const schedRes = await api.schedules.getSchedules(scheduleCounselor.id);
+      if (schedRes.success && schedRes.data) setSchedules(schedRes.data);
+      setAddScheduleForm({ day_of_week: 1, start_time: '09:00', end_time: '12:00' });
+    } else {
+      alert(res.error || '添加失败');
+    }
+  };
+
+  const handleDeleteSchedule = async (scheduleId: number) => {
+    if (!scheduleCounselor) return;
+    const res = await api.schedules.deleteSchedule(scheduleCounselor.id, scheduleId);
+    if (res.success) {
+      const schedRes = await api.schedules.getSchedules(scheduleCounselor.id);
+      if (schedRes.success && schedRes.data) setSchedules(schedRes.data);
+    }
+  };
+
+  const handleAddUnavailableDate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!scheduleCounselor) return;
+    const res = await api.schedules.addUnavailableDate(scheduleCounselor.id, addUnavailableForm);
+    if (res.success) {
+      const unavailRes = await api.schedules.getUnavailableDates(scheduleCounselor.id);
+      if (unavailRes.success && unavailRes.data) setUnavailableDates(unavailRes.data);
+      setAddUnavailableForm({ unavailable_date: '', reason: '' });
+    } else {
+      alert(res.error || '添加失败');
+    }
+  };
+
+  const handleDeleteUnavailableDate = async (dateId: number) => {
+    if (!scheduleCounselor) return;
+    const res = await api.schedules.deleteUnavailableDate(scheduleCounselor.id, dateId);
+    if (res.success) {
+      const unavailRes = await api.schedules.getUnavailableDates(scheduleCounselor.id);
+      if (unavailRes.success && unavailRes.data) setUnavailableDates(unavailRes.data);
+    }
+  };
+
   if (loading) return <div className="text-center py-12">加载中...</div>;
 
   return (
@@ -167,50 +242,39 @@ export default function Counselors() {
               {c.available_slots && (
                 <p className="text-xs text-gray-500 mb-4">可约时段: {formatSlots(c.available_slots)}</p>
               )}
-              {(isAdmin || user?.role === 'counselor') && (
-                <div className="flex gap-2 pt-3 border-t border-gray-100">
+              <div className="flex flex-wrap gap-2 pt-3 border-t border-gray-100">
+                <Button size="sm" variant="secondary" onClick={() => openScheduleManager(c)}>
+                  <Calendar className="w-4 h-4 mr-1" />
+                  排班管理
+                </Button>
+                {(isAdmin || isCounselor) && (
                   <Button size="sm" variant="secondary" onClick={() => openEdit(c)}>
                     <Pencil className="w-4 h-4 mr-1" />
                     编辑
                   </Button>
-                  {isAdmin && (
-                    <>
-                      <Button size="sm" variant={c.is_active ? 'danger' : 'primary'} onClick={() => handleToggle(c.id)}>
-                        <Power className="w-4 h-4 mr-1" />
-                        {c.is_active ? '停用' : '启用'}
-                      </Button>
-                      <Button size="sm" variant="danger" onClick={() => handleDelete(c.id)}>
-                        <Trash2 className="w-4 h-4 mr-1" />
-                        删除
-                      </Button>
-                    </>
-                  )}
-                </div>
-              )}
+                )}
+                {isAdmin && (
+                  <>
+                    <Button size="sm" variant={c.is_active ? 'danger' : 'primary'} onClick={() => handleToggle(c.id)}>
+                      <Power className="w-4 h-4 mr-1" />
+                      {c.is_active ? '停用' : '启用'}
+                    </Button>
+                    <Button size="sm" variant="danger" onClick={() => handleDelete(c.id)}>
+                      <Trash2 className="w-4 h-4 mr-1" />
+                      删除
+                    </Button>
+                  </>
+                )}
+              </div>
             </CardContent>
           </Card>
         ))}
       </div>
 
-      <Modal
-        open={modalOpen}
-        onClose={() => setModalOpen(false)}
-        title={editing ? '编辑咨询师' : '新增咨询师'}
-      >
+      <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={editing ? '编辑咨询师' : '新增咨询师'}>
         <form onSubmit={handleSubmit} className="space-y-4">
-          <Input
-            label="姓名"
-            value={form.name}
-            onChange={(e) => setForm({ ...form, name: e.target.value })}
-            required
-          />
-          <Input
-            label="资质"
-            value={form.qualification}
-            onChange={(e) => setForm({ ...form, qualification: e.target.value })}
-            placeholder="如：国家二级心理咨询师"
-            required
-          />
+          <Input label="姓名" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
+          <Input label="资质" value={form.qualification} onChange={(e) => setForm({ ...form, qualification: e.target.value })} placeholder="如：国家二级心理咨询师" required />
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">擅长方向</label>
             <div className="flex flex-wrap gap-2">
@@ -218,56 +282,99 @@ export default function Counselors() {
                 const arr = Array.isArray(form.specialties) ? form.specialties : [];
                 const active = arr.includes(s);
                 return (
-                  <button
-                    key={s}
-                    type="button"
-                    onClick={() => toggleSpecialty(s)}
-                    className={`px-3 py-1 rounded-full text-sm border transition-colors ${
-                      active
-                        ? 'bg-blue-100 text-blue-700 border-blue-300'
-                        : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
-                    }`}
-                  >
+                  <button key={s} type="button" onClick={() => toggleSpecialty(s)} className={`px-3 py-1 rounded-full text-sm border transition-colors ${active ? 'bg-blue-100 text-blue-700 border-blue-300' : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'}`}>
                     {s}
                   </button>
                 );
               })}
             </div>
           </div>
-          <Textarea
-            label="可预约时段"
-            value={form.available_slots}
-            onChange={(e) => setForm({ ...form, available_slots: e.target.value })}
-            placeholder="如：周一 09:00-12:00,周三 14:00-18:00"
-            rows={2}
-          />
+          <Textarea label="可预约时段" value={form.available_slots} onChange={(e) => setForm({ ...form, available_slots: e.target.value })} placeholder="如：周一 09:00-12:00,周三 14:00-18:00" rows={2} />
           <div className="grid grid-cols-2 gap-4">
-            <Input
-              label="单次时长(分钟)"
-              type="number"
-              value={form.session_duration}
-              onChange={(e) => setForm({ ...form, session_duration: Number(e.target.value) })}
-            />
-            <Input
-              label="收费(元)"
-              type="number"
-              value={form.fee}
-              onChange={(e) => setForm({ ...form, fee: Number(e.target.value) })}
-            />
+            <Input label="单次时长(分钟)" type="number" value={form.session_duration} onChange={(e) => setForm({ ...form, session_duration: Number(e.target.value) })} />
+            <Input label="收费(元)" type="number" value={form.fee} onChange={(e) => setForm({ ...form, fee: Number(e.target.value) })} />
           </div>
-          <Textarea
-            label="简介"
-            value={form.bio}
-            onChange={(e) => setForm({ ...form, bio: e.target.value })}
-            rows={3}
-          />
+          <Textarea label="简介" value={form.bio} onChange={(e) => setForm({ ...form, bio: e.target.value })} rows={3} />
           <div className="flex justify-end gap-3 pt-4">
-            <Button type="button" variant="secondary" onClick={() => setModalOpen(false)}>
-              取消
-            </Button>
+            <Button type="button" variant="secondary" onClick={() => setModalOpen(false)}>取消</Button>
             <Button type="submit">保存</Button>
           </div>
         </form>
+      </Modal>
+
+      <Modal open={scheduleModalOpen} onClose={() => setScheduleModalOpen(false)} title={`${scheduleCounselor?.name || ''} - 排班管理`} maxWidth="max-w-2xl">
+        <div className="space-y-6">
+          <div>
+            <h3 className="text-base font-semibold mb-3 flex items-center gap-2">
+              <Clock className="w-4 h-4 text-blue-600" />
+              每周可预约时段
+            </h3>
+            {schedules.length > 0 ? (
+              <div className="space-y-2 mb-4">
+                {schedules.map((s: any) => (
+                  <div key={s.id} className="flex items-center justify-between bg-gray-50 rounded-lg px-3 py-2">
+                    <div className="flex items-center gap-3">
+                      <Badge variant="info">{DAY_NAMES[s.day_of_week] || `周${s.day_of_week}`}</Badge>
+                      <span className="text-sm font-medium">{s.start_time} - {s.end_time}</span>
+                    </div>
+                    <Button size="sm" variant="danger" onClick={() => handleDeleteSchedule(s.id)}>
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-gray-500 mb-4">暂无固定排班，将使用咨询师资料中的可约时段</p>
+            )}
+            <form onSubmit={handleAddSchedule} className="flex items-end gap-3 bg-blue-50 p-3 rounded-lg">
+              <Select
+                label="星期"
+                value={String(addScheduleForm.day_of_week)}
+                onChange={(e) => setAddScheduleForm({ ...addScheduleForm, day_of_week: Number(e.target.value) })}
+                options={DAY_OPTIONS.map((d) => ({ value: String(d.value), label: d.label }))}
+                className="w-28"
+              />
+              <Input label="开始时间" type="time" value={addScheduleForm.start_time} onChange={(e) => setAddScheduleForm({ ...addScheduleForm, start_time: e.target.value })} className="w-32" />
+              <Input label="结束时间" type="time" value={addScheduleForm.end_time} onChange={(e) => setAddScheduleForm({ ...addScheduleForm, end_time: e.target.value })} className="w-32" />
+              <Button type="submit" size="sm" className="mb-0.5">
+                <Plus className="w-4 h-4 mr-1" />
+                添加
+              </Button>
+            </form>
+          </div>
+
+          <div>
+            <h3 className="text-base font-semibold mb-3 flex items-center gap-2">
+              <Calendar className="w-4 h-4 text-red-600" />
+              临时停诊日期
+            </h3>
+            {unavailableDates.length > 0 ? (
+              <div className="space-y-2 mb-4">
+                {unavailableDates.map((d: any) => (
+                  <div key={d.id} className="flex items-center justify-between bg-red-50 rounded-lg px-3 py-2">
+                    <div>
+                      <span className="text-sm font-medium text-red-700">{d.unavailable_date}</span>
+                      {d.reason && <span className="text-sm text-gray-500 ml-2">（{d.reason}）</span>}
+                    </div>
+                    <Button size="sm" variant="danger" onClick={() => handleDeleteUnavailableDate(d.id)}>
+                      <X className="w-3.5 h-3.5" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-gray-500 mb-4">暂无临时停诊日期</p>
+            )}
+            <form onSubmit={handleAddUnavailableDate} className="flex items-end gap-3 bg-red-50 p-3 rounded-lg">
+              <Input label="停诊日期" type="date" value={addUnavailableForm.unavailable_date} onChange={(e) => setAddUnavailableForm({ ...addUnavailableForm, unavailable_date: e.target.value })} className="w-40" />
+              <Input label="原因（可选）" value={addUnavailableForm.reason} onChange={(e) => setAddUnavailableForm({ ...addUnavailableForm, reason: e.target.value })} placeholder="如：培训、请假" className="flex-1" />
+              <Button type="submit" size="sm" variant="danger" className="mb-0.5">
+                <Plus className="w-4 h-4 mr-1" />
+                添加
+              </Button>
+            </form>
+          </div>
+        </div>
       </Modal>
     </div>
   );

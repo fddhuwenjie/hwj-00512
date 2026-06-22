@@ -3,7 +3,7 @@ import { api } from '@/lib/api';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import {
-  CalendarCheck, Users, UserCircle, ClipboardList, XCircle, AlertTriangle, Clock, BarChart3, PieChart, TrendingUp
+  CalendarCheck, Users, UserCircle, ClipboardList, XCircle, AlertTriangle, Clock, BarChart3, PieChart, TrendingUp, RefreshCw, Shield, CalendarOff
 } from 'lucide-react';
 
 export default function Statistics() {
@@ -21,7 +21,8 @@ export default function Statistics() {
 
   if (loading) return <div className="text-center py-12">加载中...</div>;
 
-  const { overview, counselorWorkload, specialtyDistribution, scaleDistribution, highRisk30Days, recentAppointments } = data || {};
+  const { overview, counselorWorkload, specialtyDistribution, scaleDistribution, highRisk30Days, recentAppointments,
+    counselorUtilization, rescheduleStats, conflictIntercepted, unavailableDateImpact, totalUnavailableImpact } = data || {};
 
   const StatCard = ({ icon: Icon, label, value, color, sub }: any) => (
     <Card>
@@ -60,6 +61,17 @@ export default function Statistics() {
         </div>
       )}
 
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <StatCard icon={RefreshCw} label="改期总次数" value={rescheduleStats?.total || 0} color="orange" sub={`待处理 ${rescheduleStats?.pending || 0} 条`} />
+        <StatCard icon={Shield} label="冲突拦截次数" value={conflictIntercepted || 0} color="red" sub="预约时段冲突被拦截" />
+        <StatCard icon={CalendarOff} label="停诊影响预约" value={totalUnavailableImpact || 0} color="amber" sub="临时停诊影响的预约数" />
+        <StatCard icon={TrendingUp} label="改期通过率" value={
+          rescheduleStats?.total > 0
+            ? `${Math.round((rescheduleStats.approved / rescheduleStats.total) * 100)}%`
+            : '0%'
+        } color="green" sub={`通过 ${rescheduleStats?.approved || 0} / 拒绝 ${rescheduleStats?.rejected || 0}`} />
+      </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card>
           <CardHeader>
@@ -82,10 +94,7 @@ export default function Statistics() {
                         </span>
                       </div>
                       <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-                        <div
-                          className="h-full bg-blue-500 rounded-full transition-all"
-                          style={{ width: `${pct}%` }}
-                        />
+                        <div className="h-full bg-blue-500 rounded-full transition-all" style={{ width: `${pct}%` }} />
                       </div>
                     </div>
                   );
@@ -100,33 +109,29 @@ export default function Statistics() {
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <PieChart className="w-5 h-5 text-green-600" />
-              擅长方向分布
+              <BarChart3 className="w-5 h-5 text-purple-600" />
+              咨询师时段利用率
             </CardTitle>
           </CardHeader>
           <CardContent>
-            {specialtyDistribution?.length ? (
+            {counselorUtilization?.length ? (
               <div className="space-y-3">
-                {(() => {
-                  const max = Math.max(...specialtyDistribution.map((s: any) => s.count));
-                  return specialtyDistribution.map((s: any) => {
-                    const pct = max > 0 ? Math.round((s.count / max) * 100) : 0;
-                    return (
-                      <div key={s.name}>
-                        <div className="flex items-center justify-between mb-1">
-                          <span className="font-medium text-sm">{s.name}</span>
-                          <span className="text-xs text-gray-500">{s.count} 位咨询师</span>
-                        </div>
-                        <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-                          <div
-                            className="h-full bg-green-500 rounded-full"
-                            style={{ width: `${pct}%` }}
-                          />
-                        </div>
-                      </div>
-                    );
-                  });
-                })()}
+                {counselorUtilization.map((c: any) => (
+                  <div key={c.id}>
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="font-medium text-sm">{c.name}</span>
+                      <span className="text-xs text-gray-500">
+                        已预约 {c.booked_appointments} / 排班 {c.total_schedule_slots} ({c.utilization_rate}%)
+                      </span>
+                    </div>
+                    <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                      <div
+                        className={`h-full rounded-full transition-all ${c.utilization_rate > 70 ? 'bg-green-500' : c.utilization_rate > 40 ? 'bg-yellow-500' : 'bg-red-400'}`}
+                        style={{ width: `${Math.min(c.utilization_rate, 100)}%` }}
+                      />
+                    </div>
+                  </div>
+                ))}
               </div>
             ) : (
               <p className="text-center text-gray-500 py-6">暂无数据</p>
@@ -134,6 +139,125 @@ export default function Statistics() {
           </CardContent>
         </Card>
       </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <RefreshCw className="w-5 h-5 text-orange-600" />
+              改期统计
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {rescheduleStats && rescheduleStats.total > 0 ? (
+              <div className="space-y-4">
+                <div className="grid grid-cols-3 gap-4">
+                  <div className="text-center p-3 bg-green-50 rounded-lg">
+                    <p className="text-2xl font-bold text-green-600">{rescheduleStats.approved}</p>
+                    <p className="text-xs text-gray-500">已通过</p>
+                  </div>
+                  <div className="text-center p-3 bg-red-50 rounded-lg">
+                    <p className="text-2xl font-bold text-red-600">{rescheduleStats.rejected}</p>
+                    <p className="text-xs text-gray-500">已拒绝</p>
+                  </div>
+                  <div className="text-center p-3 bg-orange-50 rounded-lg">
+                    <p className="text-2xl font-bold text-orange-600">{rescheduleStats.pending}</p>
+                    <p className="text-xs text-gray-500">待处理</p>
+                  </div>
+                </div>
+                <div className="h-3 bg-gray-100 rounded-full overflow-hidden flex">
+                  {rescheduleStats.approved > 0 && (
+                    <div className="h-full bg-green-500" style={{ width: `${(rescheduleStats.approved / rescheduleStats.total) * 100}%` }} />
+                  )}
+                  {rescheduleStats.rejected > 0 && (
+                    <div className="h-full bg-red-400" style={{ width: `${(rescheduleStats.rejected / rescheduleStats.total) * 100}%` }} />
+                  )}
+                  {rescheduleStats.pending > 0 && (
+                    <div className="h-full bg-orange-400" style={{ width: `${(rescheduleStats.pending / rescheduleStats.total) * 100}%` }} />
+                  )}
+                </div>
+              </div>
+            ) : (
+              <p className="text-center text-gray-500 py-6">暂无改期记录</p>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <CalendarOff className="w-5 h-5 text-amber-600" />
+              临时停诊影响
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {unavailableDateImpact?.length > 0 ? (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-gray-200 bg-amber-50">
+                      <th className="text-left py-2 px-3 font-medium text-gray-700">咨询师</th>
+                      <th className="text-left py-2 px-3 font-medium text-gray-700">停诊日期</th>
+                      <th className="text-left py-2 px-3 font-medium text-gray-700">原因</th>
+                      <th className="text-left py-2 px-3 font-medium text-gray-700">影响预约</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {unavailableDateImpact.map((r: any) => (
+                      <tr key={r.id} className="border-b border-gray-100 hover:bg-gray-50">
+                        <td className="py-2 px-3">{r.counselor_name}</td>
+                        <td className="py-2 px-3">{r.unavailable_date}</td>
+                        <td className="py-2 px-3 text-gray-500">{r.reason || '-'}</td>
+                        <td className="py-2 px-3">
+                          <Badge variant={r.affected_appointments > 0 ? 'danger' : 'success'}>
+                            {r.affected_appointments}个
+                          </Badge>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <p className="text-center text-gray-500 py-6">暂无临时停诊记录</p>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <PieChart className="w-5 h-5 text-green-600" />
+            擅长方向分布
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {specialtyDistribution?.length ? (
+            <div className="space-y-3">
+              {(() => {
+                const max = Math.max(...specialtyDistribution.map((s: any) => s.count));
+                return specialtyDistribution.map((s: any) => {
+                  const pct = max > 0 ? Math.round((s.count / max) * 100) : 0;
+                  return (
+                    <div key={s.name}>
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="font-medium text-sm">{s.name}</span>
+                        <span className="text-xs text-gray-500">{s.count} 位咨询师</span>
+                      </div>
+                      <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                        <div className="h-full bg-green-500 rounded-full" style={{ width: `${pct}%` }} />
+                      </div>
+                    </div>
+                  );
+                });
+              })()}
+            </div>
+          ) : (
+            <p className="text-center text-gray-500 py-6">暂无数据</p>
+          )}
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>
@@ -159,10 +283,7 @@ export default function Statistics() {
                           <div key={s.level} className="flex items-center gap-3">
                             <span className="w-20 text-sm shrink-0">{s.level}</span>
                             <div className="flex-1 h-5 bg-gray-100 rounded-full overflow-hidden">
-                              <div
-                                className={`h-full rounded-full ${isRisk ? 'bg-red-400' : 'bg-blue-400'}`}
-                                style={{ width: `${pct}%` }}
-                              />
+                              <div className={`h-full rounded-full ${isRisk ? 'bg-red-400' : 'bg-blue-400'}`} style={{ width: `${pct}%` }} />
                             </div>
                             <span className="w-16 text-right text-sm text-gray-600">{s.count} ({pct}%)</span>
                           </div>

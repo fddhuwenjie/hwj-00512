@@ -7,9 +7,10 @@ interface ModalProps {
   title?: string;
   children: React.ReactNode;
   className?: string;
+  maxWidth?: string;
 }
 
-export function Modal({ open, onClose, title, children, className }: ModalProps) {
+export function Modal({ open, onClose, title, children, className, maxWidth }: ModalProps) {
   if (!open) return null;
 
   return (
@@ -17,7 +18,7 @@ export function Modal({ open, onClose, title, children, className }: ModalProps)
       <div className="fixed inset-0 bg-black/50" onClick={onClose} />
       <div
         className={cn(
-          'relative z-10 w-full max-w-lg bg-white rounded-xl shadow-xl max-h-[90vh] overflow-y-auto',
+          `relative z-10 w-full ${maxWidth || 'max-w-lg'} bg-white rounded-xl shadow-xl max-h-[90vh] overflow-y-auto`,
           className
         )}
       >

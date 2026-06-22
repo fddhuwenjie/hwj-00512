@@ -14,6 +14,7 @@ import appointmentRoutes from './routes/appointments.js'
 import assessmentRoutes from './routes/assessments.js'
 import sessionRecordRoutes from './routes/session_records.js'
 import statisticsRoutes from './routes/statistics.js'
+import scheduleRoutes from './routes/schedules.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -33,6 +34,7 @@ app.use('/api/appointments', appointmentRoutes)
 app.use('/api/assessments', assessmentRoutes)
 app.use('/api/session-records', sessionRecordRoutes)
 app.use('/api/statistics', statisticsRoutes)
+app.use('/api/schedules', scheduleRoutes)
 
 app.use(
   '/api/health',
